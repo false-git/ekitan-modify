@@ -88,7 +88,7 @@ class EkitanLog:
                     headline = line
                     continue
                 if headline is not None:
-                    line = headline + "\t" + line
+                    line = line + "\t" + headline
                     headline = None
                 # plan
                 m = self.plan_regex.search(line)
