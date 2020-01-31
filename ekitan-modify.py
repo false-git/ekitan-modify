@@ -10,16 +10,19 @@ class EkitanLog:
     駅探の経路探索結果のテキストをごにょごにょする
     """
 
-    STATE_NONE = 0
-    STATE_START = 1
-    STATE_END = 2
-
     def __init__(self):
         self.reserve_lines = []
-        self.start_time = None
-        self.end_time = None
+        self.prev_index = None
+        self.prev_time = None
         self.start_regex = re.compile(r"(\d\d:\d\d)発")
         self.end_regex = re.compile(r"(\d\d:\d\d)着")
+        self.plan_regex = re.compile(r"^Plan ([^ ]+)$")
+        self.plan_name = None
+        self.plans = set()
+        self.plan_prev_index = None
+        self.plan_prev_time = None
+        self.plan_ends = {}
+        self.outlines = []
 
     def timedelta2string(self, delta):
         """
@@ -42,33 +45,41 @@ class EkitanLog:
             return "{}分".format(mm)
         return "{}:{:02}分".format(hh, mm)
 
-    def output_reserve_lines(self, delta):
+    def output_time(self, current_time):
         """
-        保存していた行を出力する
+        所要時間を出力する
 
         Parameters
         ----------
-        delta : timedelta
-            保存していた間の時間差
+        current_time : datetime
+            現在の時間
         """
-        if len(self.reserve_lines) == 0:
+        if self.prev_index is None:
             return
-        if delta is not None:
-            first_line = self.reserve_lines.pop(0)
-            print("{}\t({})".format(first_line, self.timedelta2string(delta)))
-        for line in self.reserve_lines:
-            print(line)
-        self.reserve_lines = []
+        if self.plan_name is not None:
+            if self.plan_name in self.plans:
+                delta = current_time - self.plan_prev_time
+                self.outlines[self.plan_prev_index] += " Plan {}: {}".format(
+                    self.plan_name, self.timedelta2string(delta)
+                )
+                self.plans.remove(self.plan_name)
+        elif len(self.plan_ends) > 0:
+            for plan, d in self.plan_ends.items():
+                delta = current_time - d[1]
+                self.outlines[d[0]] += " {}".format(self.timedelta2string(delta))
+            self.plan_ends = {}
+        else:
+            delta = current_time - self.prev_time
+            self.outlines[self.prev_index] += " {}".format(self.timedelta2string(delta))
 
     def read_ekitan(self, filename):
         """
         駅探の検索結果のテキストをちょっと整形する
         """
         with open(filename, "r") as f:
-            self.state = EkitanLog.STATE_NONE
             headline = None
             for line in f:
-                line = line.strip()
+                line = line.rstrip()
                 if line.startswith("往復："):
                     continue
                 if line.startswith("※大人"):
@@ -79,23 +90,44 @@ class EkitanLog:
                 if headline is not None:
                     line = headline + "\t" + line
                     headline = None
+                # plan
+                m = self.plan_regex.search(line)
+                if m is not None:
+                    plan = m.group(1)
+                    if self.plan_name is None:
+                        self.plan_prev_index = self.prev_index
+                        self.plan_prev_time = self.prev_time
+                    elif self.prev_index is not None:
+                        self.plan_ends[self.plan_name] = (
+                            self.prev_index,
+                            self.prev_time,
+                        )
+                    if plan == "End":
+                        self.plan_name = None
+                        self.plans = set()
+                    else:
+                        self.plan_name = plan
+                        self.plans.add(plan)
+
+                # start
                 m = self.start_regex.search(line)
                 if m is not None:
-                    self.start_time = datetime.datetime.strptime(m.group(1), "%H:%M")
-                    if self.state == EkitanLog.STATE_END:
-                        self.output_reserve_lines(self.start_time - self.end_time)
-                    self.state = EkitanLog.STATE_START
+                    current_time = datetime.datetime.strptime(m.group(1), "%H:%M")
+                    self.output_time(current_time)
+                    self.prev_index = len(self.outlines)
+                    self.prev_time = current_time
+
+                # end
                 m = self.end_regex.search(line)
                 if m is not None:
-                    self.end_time = datetime.datetime.strptime(m.group(1), "%H:%M")
-                    if self.state == EkitanLog.STATE_START:
-                        self.output_reserve_lines(self.end_time - self.start_time)
-                    self.state = EkitanLog.STATE_END
-                if self.state == EkitanLog.STATE_NONE:
-                    print(line)
-                else:
-                    self.reserve_lines.append(line)
-            self.output_reserve_lines(None)
+                    current_time = datetime.datetime.strptime(m.group(1), "%H:%M")
+                    self.output_time(current_time)
+                    self.prev_index = len(self.outlines) + 1
+                    self.prev_time = current_time
+
+                self.outlines.append(line)
+        for line in self.outlines:
+            print(line)
 
 
 if __name__ == "__main__":
