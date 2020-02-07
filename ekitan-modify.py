@@ -57,20 +57,24 @@ class EkitanLog:
         if self.prev_index is None:
             return
         if self.plan_name is not None:
+            # プラン中
             if self.plan_name in self.plans:
+                # 現在のプランの最初の「発」
                 delta = current_time - self.plan_prev_time
                 self.outlines[self.plan_prev_index] += " Plan {}: {}".format(
                     self.plan_name, self.timedelta2string(delta)
                 )
                 self.plans.remove(self.plan_name)
+                return
         elif len(self.plan_ends) > 0:
+            # プランの後最初の「発」が来た時
             for plan, d in self.plan_ends.items():
                 delta = current_time - d[1]
                 self.outlines[d[0]] += " {}".format(self.timedelta2string(delta))
             self.plan_ends = {}
-        else:
-            delta = current_time - self.prev_time
-            self.outlines[self.prev_index] += " {}".format(self.timedelta2string(delta))
+            return
+        delta = current_time - self.prev_time
+        self.outlines[self.prev_index] += " {}".format(self.timedelta2string(delta))
 
     def read_ekitan(self, filename):
         """
