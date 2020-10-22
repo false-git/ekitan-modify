@@ -39,7 +39,7 @@ class EkitanLog:
             可読な文字列
         """
         ts = int(delta.total_seconds())
-        mm = ts // 60
+        mm = ts // 60 % 60
         hh = ts // 3600
         if hh == 0:
             return "{}分".format(mm)
@@ -63,14 +63,14 @@ class EkitanLog:
                     self.plan_name, self.timedelta2string(delta)
                 )
                 self.plans.remove(self.plan_name)
+                return
         elif len(self.plan_ends) > 0:
             for plan, d in self.plan_ends.items():
                 delta = current_time - d[1]
                 self.outlines[d[0]] += " {}".format(self.timedelta2string(delta))
             self.plan_ends = {}
-        else:
-            delta = current_time - self.prev_time
-            self.outlines[self.prev_index] += " {}".format(self.timedelta2string(delta))
+        delta = current_time - self.prev_time
+        self.outlines[self.prev_index] += " {}".format(self.timedelta2string(delta))
 
     def read_ekitan(self, filename):
         """
